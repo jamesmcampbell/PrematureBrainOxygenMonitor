@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 5/29/24
+ * Last revised and modified by David J. Kim on 6/19/24
  */
 
 // begin - define constants**********************************
@@ -273,7 +273,11 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
 
   // variable to store the number of times "Toggle Autoscroll" button was pressed
   // used by 'Cmd_ToggleAutoscroll'
-  unsigned int toggleCounter = 0;
+  unsigned int toggleAutoScrollCounter = 0;
+
+  // variable to store the number of times "Toggle Data Stream" button was pressed
+  // used by 'Cmd_ToggleDataStream'
+  unsigned int toggleDataStreamCounter = 0;
 
 // end - global variables************************************
 
@@ -659,7 +663,7 @@ void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
 // This does not stop data from being sent to the device. Rather, it halts the display
 // of new data at user's will. This cmd is used by the "ToggleAutoscroll" button.
 void Cmd_ToggleAutoscroll(){
-  if (toggleCounter % 2 == 0) { // if even, stop the scroll
+  if (toggleAutoScrollCounter % 2 == 0) { // if even, stop the scroll
     PD1TSA.Run(false);
     PD2TSA.Run(false);
     PD3TSA.Run(false);
@@ -674,7 +678,7 @@ void Cmd_ToggleAutoscroll(){
     PD2TSB.Run(true);
     PD3TSB.Run(true);
   }
-  toggleCounter++; // keep track of number times function called
+  toggleAutoScrollCounter++; // keep track of number times function called
 }
 
 // Cmd_MarkPlotPoint sends a visible data point at the current point in time, this point is saved
@@ -860,7 +864,53 @@ void Cmd_SetControlsToDefault(){
   MyPanel.SetNumber(F("SampleAVG"), 6);
   MyPanel.SetNumber(F("Sample"), 16);
 }
+
+// Cmd_ClearData deletes all data points from all time plots on the GUI.
+// Ex.
+//    '!ClearData \r\n'
+// Result:
+//    All time plots are empty.
+// This cmd is used by the "Clear All Data" button on the GUI.
+void Cmd_ClearData(){
+  PD1TSA.Clear();
+  PD2TSA.Clear();
+  PD3TSA.Clear();
+  PD1TSB.Clear();
+  PD2TSB.Clear();
+  PD3TSB.Clear();
+}
+
+// Cmd_ToggleDataStream stops data from being sent to the GUI.
+// Ex.
+//    '!ToggleDataStream \r\n'
+// Result:
+//    All timeplots no longer update with new data.
+// This cmd is used by the "Toggle Data Stream" button on the GUI.
+void Cmd_ToggleDataStream(){
+  toggleDataStreamCounter++;
+
+  if((toggleDataStreamCounter % 2) == 1) {
+    ModifyRegister(1, 75, 128, 0); // disable sample clock
+  } else {
+    afeSmplClk(); // enable sample clock
+  }
+}
 // End MegunoLink function to recieve data from interface panel
+
+// Helper function to allow code to modify data registers
+void ModifyRegister(bool modFlag, byte modReg, word modByte, word modVal){
+  afeModConfigFlag = modFlag;
+  mlRegMod = modReg;
+  mlByteMod = modByte;
+  mlValMod = modVal;
+
+  Serial.print("mlRegMod at input");
+  Serial.println(mlRegMod);
+  Serial.print("mlByteMod at input");
+  Serial.println(mlByteMod);
+  Serial.print("mlValMod at input");
+  Serial.println(mlValMod);
+}
 
 // Helper function invoked inside afeReadData, sets calibration to default values.
 void SetCalibrationToDefault(){
@@ -925,8 +975,12 @@ void setup() {
   SerialCommandHandler.AddCommand(F("SetTimeRange"), Cmd_SetTimeRange);
   // Adds "!SetTimeRangeToDefault" function to reset x-axis bounds to 2 minutes.
   SerialCommandHandler.AddCommand(F("SetTimeRangeToDefault"), Cmd_SetTimeRangeToDefault);
-  // Adds "!MarkPlotPoint" function to mark certain points in the data to aid in the identification of important data regions
+  // Adds "!MarkPlotPoint" function to mark certain points in the data to aid in the identification of important data regions.
   SerialCommandHandler.AddCommand(F("MarkPlotPoint"), Cmd_MarkPlotPoint);
+  // Adds "!ClearData" function to delete all data from time plots.
+  SerialCommandHandler.AddCommand(F("ClearData"), Cmd_ClearData);
+  // Adds "!ToggleDataStream" function to stop data from being sent to time plots.
+  SerialCommandHandler.AddCommand(F("ToggleDataStream"), Cmd_ToggleDataStream);
 
   // reset watchdog timer at end of setup
   wdt_reset();  
