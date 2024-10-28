@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 5/21/24
+ * Last revised and modified by David J. Kim on 5/28/24
  */
 
 // begin - define constants**********************************
@@ -146,9 +146,9 @@
 #define AFE_SLOTA_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x39
 #define AFE_SLOTB_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x3B
 //#define AFE_AFE_PWR_CFG1_PUP_VALUE            0x3006  // address 0x3C
-#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C3B  // address 0x42
+#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C38  // address 0x42
 //#define AFE_SLOTA_AFE_CFG_PUP_VALUE           0xADA5  // address 0x43
-#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C3B  // address 0x44
+#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C38  // address 0x44
 //#define AFE_SLOTB_AFE_CFG_PUP_VALUE           0xADA5  // address 0x45
 #define AFE_SAMPLE_CLK_PUP_VALUE              0x26A2  // address 0x4B
 //#define AFE_CLK32M_ADJUST_PUP_VALUE           0x0098  // address 0x4D
@@ -731,7 +731,7 @@ void Cmd_SetYAxisUIValues(CommandParameter &Parameters){
 void Cmd_SetControlsToDefault(){
   MyPanel.SetNumber(F("RedLEDCoarse"), 10);
   MyPanel.SetNumber(F("NIRLEDCoarse"), 10);
-  MyPanel.SetListValue(F("TIAOptions"), 3);
+  MyPanel.SetListValue(F("TIAOptions"), 0);
   MyPanel.SetNumber(F("OFFSET"), 7800);
   MyPanel.SetNumber(F("SampleAVG"), 6);
   MyPanel.SetNumber(F("Sample"), 16);
