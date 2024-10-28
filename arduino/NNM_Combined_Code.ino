@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Revised and modified by David J. Kim (5/12/24)
+ * Revised and modified by David J. Kim (5/20/24)
  */
 
 // begin - define constants**********************************
@@ -146,9 +146,9 @@
 #define AFE_SLOTA_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x39
 #define AFE_SLOTB_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x3B
 //#define AFE_AFE_PWR_CFG1_PUP_VALUE            0x3006  // address 0x3C
-#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C38  // address 0x42
+#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C3B  // address 0x42
 //#define AFE_SLOTA_AFE_CFG_PUP_VALUE           0xADA5  // address 0x43
-#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C38  // address 0x44
+#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C3B  // address 0x44
 //#define AFE_SLOTB_AFE_CFG_PUP_VALUE           0xADA5  // address 0x45
 #define AFE_SAMPLE_CLK_PUP_VALUE              0x26A2  // address 0x4B
 //#define AFE_CLK32M_ADJUST_PUP_VALUE           0x0098  // address 0x4D
@@ -178,15 +178,18 @@
 
 // begin Meguno handles
 // Add handles for photodiode 1 timeslot A and B respectivly 
-TimePlot PD1TSA("PD1RED"), PD1TSB("PD1IR"),PD2TSA("PD2RED"), PD2TSB("PD2IR"), PD3TSA("PD3RED"),
-  PD3TSB("PD3IR"), DataMark("DataMark");
+
 // Adds a handle to send data to meguno time plots
-InterfacePanel MyPanel;
+TimePlot PD1TSA("PD1RED"), PD1TSB("PD1IR"),
+         PD2TSA("PD2RED"), PD2TSB("PD2IR"),
+         PD3TSA("PD3RED"), PD3TSB("PD3IR"),
+         DataMark("DataMark");
 //Adds handle to send data to megunolink tables 
-Table MyTable;
+InterfacePanel MyPanel;
 // Adds a handle to update no graph items on interface panel  
-CommandHandler<10, 60> SerialCommandHandler; 
+Table MyTable;
 //Allows serial commands to be processed 
+CommandHandler<10, 60> SerialCommandHandler; 
 //End Meguno handles 
 
 // begin - global variables**********************************
@@ -256,7 +259,7 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   // 16 bit word bytes that will be modified 
   word mlByteMod = 0x0000;
 
-  // calibration values for each photodiode and channel
+  // calibration variables for each photodiode channel
   // PD1
   word PD1R_calibration_val = 1;
   word PD1IR_calibration_val = 1;
@@ -266,6 +269,7 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   // PD3
   word PD3R_calibration_val = 1;
   word PD3IR_calibration_val = 1;
+
 // end - global variables************************************
 
 // begin - user defined functions****************************
@@ -487,26 +491,8 @@ void afeReadData() {
 
   // release time slots A&B data to allow sample updates to data registers
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_DATA_ACCESS_CTL_REG, AFE_DATA_ACCESS_CTL_PUP_VALUE);
-  
-  // updated SendData calls to add PD2 & PD3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  // Begin Routing to MegunLink
-  // //Writes data from photodiode 1 timeslot A to graph channel PD1TSA
-  // PD1TSA.SendData(F("PD1RED"), afePd1TSA16);
-  // //Writes data from photodiode 2 timeslot A to graph channel PD2TSA
-  // PD2TSA.SendData(F("PD2RED"), afePd2TSA16);
-  // //Writes data from photodiode 3 timeslot A to graph channel PD3TSA
-  // PD3TSA.SendData(F("PD3RED"), afePd3TSA16);
 
-  // //Writes data from photodiode 1 timeslot B to graph channel PD1TSB
-  // PD1TSB.SendData(F("PD1IR"), afePd1TSB16);
-  // //Writes data from photodiode 2 timeslot B to graph channel PD2TSB
-  // PD2TSB.SendData(F("PD2IR"), afePd2TSB16);
-  // //Writes data from photodiode 3 timeslot B to graph channel PD3TSB
-  // PD3TSB.SendData(F("PD3IR"), afePd3TSB16);
-
-
-  // FOR TESTING PURPOSES 
-
+  // checks if any inputed value causes a divide-by-zero error. if 0 is encountered, set calibration value to 1
   if ((PD1R_calibration_val == 0) || (PD2R_calibration_val == 0) || (PD3R_calibration_val == 0) ||
       (PD1IR_calibration_val == 0) || (PD2IR_calibration_val == 0) || (PD3IR_calibration_val == 0)) {
         SetCalibrationToDefault();
@@ -526,8 +512,6 @@ void afeReadData() {
   PD2TSB.SendData(F("PD2IR"), ((float)afePd2TSB16)/PD2IR_calibration_val);
   //Writes data from photodiode 3 timeslot B to graph channel PD3TSB
   PD3TSB.SendData(F("PD3IR"), ((float)afePd3TSB16)/PD3IR_calibration_val);
-
-  //
 
   // // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //End Routing to MegunoLink
@@ -579,16 +563,15 @@ void Cmd_MlReceive( CommandParameter &Parameters){
 
 // Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
 // Ex.
-//    '!Calibrate 1000 2000 3000 4000 5000 6000\r\n'
+//    '!Calibrate 1000 2000 3000 4000 5000 6000 \r\n'
 //    
-// In code:
+// Result:
 //    PD1R_calibration_val -> 1000
 //    PD2R_calibration_val -> 2000
 //    PD3R_calibration_val -> 3000
 //    PD1IR_calibration_val -> 4000
 //    PD2IR_calibration_val -> 5000
 //    PD3IR_calibration_val -> 6000
-//
 void Cmd_Calibrate(CommandParameter &Parameters){
   PD1R_calibration_val = Parameters.NextParameterAsInteger();
   PD2R_calibration_val = Parameters.NextParameterAsInteger();  
@@ -610,8 +593,60 @@ void Cmd_Calibrate(CommandParameter &Parameters){
   Serial.print("PD3IR_calibration_val: ");
   Serial.println(PD3IR_calibration_val);
 }
+
+// Cmd_UpdateYAxis updates the y-axis scale for the individual time plots on the GUI.
+// Ex.
+//    '!UpdateYAxis 0 12000 \r\n'
+// Result:
+//    All time plots on the GUI will begin at 0 and end at 12000.
+void Cmd_UpdateYAxis(CommandParameter &Parameters){
+  word YAxisLowerBound = Parameters.NextParameterAsInteger();
+  word YAxisUpperBound = Parameters.NextParameterAsInteger();
+
+  // update left and right y-axis scales for RED channel
+  // PD1
+  PD1TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD1TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  // PD2
+  PD2TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD2TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  // PD3
+  PD3TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD3TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+
+  // update left and right y-axis scales for NIR channel
+  // PD1
+  PD1TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD1TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  // PD2
+  PD2TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD2TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  // PD3
+  PD3TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+  PD3TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+
+  Serial.print("YAxisLowerBound: ");
+  Serial.println(YAxisLowerBound);
+  Serial.print("YAxisUpperBound: ");
+  Serial.println(YAxisUpperBound);
+}
+
+// Cmd_SetControlsToDefault sets the GUI numbers to their default values.
+// Ex.
+//    '!SetControlsToDefault \r\n'
+// Result:
+//    All device settings will display their default values.
+void Cmd_SetControlsToDefault(){
+  MyPanel.SetNumber(F("RedLEDCoarse"), 10);
+  MyPanel.SetNumber(F("NIRLEDCoarse"), 10);
+  MyPanel.SetListValue(F("TIAOptions"), 3);
+  MyPanel.SetNumber(F("OFFSET"), 7800);
+  MyPanel.SetNumber(F("SampleAVG"), 6);
+  MyPanel.SetNumber(F("Sample"), 16);
+}
 // End MegunoLink function to recieve data from interface panel
 
+// helper function for afeReadData, sets calibration to default values
 void SetCalibrationToDefault(){
   PD1R_calibration_val = 1;
   PD2R_calibration_val = 1;
@@ -666,11 +701,12 @@ void setup() {
   // Adds "!MlReceive" function to receive data from Meguno via serial
   SerialCommandHandler.AddCommand(F("MlReceive"), Cmd_MlReceive);
   SerialCommandHandler.AddCommand(F("MlRequest"), Cmd_MlRequest);
-
-  // Added "!Calibrate" function to set calibration values
+  // Adds "!Calibrate" function to set calibration values
   SerialCommandHandler.AddCommand(F("Calibrate"), Cmd_Calibrate);
-
-  //Adds all registers into array
+  // Adds "!UpdateYAxis" function to change y-axis boundaries
+  SerialCommandHandler.AddCommand(F("UpdateYAxis"), Cmd_UpdateYAxis);
+  // Adds "!SetControlsToDefault" function to set GUI controls to display default values.
+  SerialCommandHandler.AddCommand(F("SetControlsToDefault"), Cmd_SetControlsToDefault);
 
   // reset watchdog timer at end of setup
   wdt_reset();  
