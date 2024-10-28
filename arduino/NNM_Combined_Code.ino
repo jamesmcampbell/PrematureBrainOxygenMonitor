@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 5/28/24
+ * Last revised and modified by David J. Kim on 5/29/24
  */
 
 // begin - define constants**********************************
@@ -183,13 +183,13 @@
 TimePlot PD1TSA("PD1RED"), PD1TSB("PD1IR"),
          PD2TSA("PD2RED"), PD2TSB("PD2IR"),
          PD3TSA("PD3RED"), PD3TSB("PD3IR"),
-         DataMark("DataMark");
+         MarkedPoints("MarkedPoints");
 //Adds handle to send data to megunolink tables 
 InterfacePanel MyPanel;
 // Adds a handle to update no graph items on interface panel  
 Table MyTable;
 //Allows serial commands to be processed 
-CommandHandler<10, 60> SerialCommandHandler; 
+CommandHandler<20, 60, 10> SerialCommandHandler; 
 //End Meguno handles 
 
 // begin - global variables**********************************
@@ -260,6 +260,7 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   word mlByteMod = 0x0000;
 
   // calibration variables for each photodiode channel
+  // used by 'Cmd_Calibrate' and 'Cmd_SetCalibrateSetting'
   // PD1
   word PD1R_calibration_val = 1;
   word PD1IR_calibration_val = 1;
@@ -269,6 +270,10 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   // PD3
   word PD3R_calibration_val = 1;
   word PD3IR_calibration_val = 1;
+
+  // variable to store the number of times "Toggle Autoscroll" button was pressed
+  // used by 'Cmd_ToggleAutoscroll'
+  unsigned int toggleCounter = 0;
 
 // end - global variables************************************
 
@@ -561,6 +566,17 @@ void Cmd_MlReceive( CommandParameter &Parameters){
   Serial.println(mlValMod);
 }
 
+//BEGIN function to send all register values to chart in megunolink
+void ReadAllRegisters(){
+  int count = 0;
+  while(count<51){
+    word value = i2cRead2Bytes(AFE_I2C_ADDRESS, Registers[count]);
+    MyTable.SendData(Registers[count], value, "Register, Value (decimal)");
+    count = count +1;
+  }
+}
+//END function to send all register values to chart in megunolink
+
 // Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
 // Ex.
 //    '!Calibrate 1000 2000 3000 4000 5000 6000 \r\n'
@@ -603,28 +619,28 @@ void Cmd_Calibrate(CommandParameter &Parameters){
 // This cmd is used by the "Apply Calibration" button on the GUI.
 void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
   int CalibrationSelection = Parameters.NextParameterAsInteger();
-  if (CalibrationSelection == 0) {
+  if (CalibrationSelection == 0) { // values from Mourad's experiment (200k gain)
     PD1R_calibration_val = 586;
     PD2R_calibration_val = 586;
     PD3R_calibration_val = 1236;
     PD1IR_calibration_val = 2420;
     PD2IR_calibration_val = 2363;
     PD3IR_calibration_val = 2051;
-  } else if (CalibrationSelection == 1) {
+  } else if (CalibrationSelection == 1) { // unused
     PD1R_calibration_val = 1;
     PD2R_calibration_val = 1;
     PD3R_calibration_val = 1;
     PD1IR_calibration_val = 1;
     PD2IR_calibration_val = 1;
     PD3IR_calibration_val = 1;
-  } else if (CalibrationSelection == 2) {
+  } else if (CalibrationSelection == 2) { // unused
     PD1R_calibration_val = 2;
     PD2R_calibration_val = 1;
     PD3R_calibration_val = 1;
     PD1IR_calibration_val = 1;
     PD2IR_calibration_val = 1;
     PD3IR_calibration_val = 1;
-  } else if (CalibrationSelection == 3) {
+  } else if (CalibrationSelection == 3) { // unused
     PD1R_calibration_val = 3;
     PD2R_calibration_val = 1;
     PD3R_calibration_val = 1;
@@ -634,18 +650,83 @@ void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
   }
 }
 
-// Cmd_UpdateYAxis updates the y-axis scale for the individual time plots on the GUI.
+// Cmd_ToggleAutoscroll disables or enables the autoscrolling of all channels at once.
 // Ex.
-//    '!UpdateYAxis 0 12000 0 0 0 1 1 1 \r\n'
+//    '!ToggleAutoscroll \r\n'
+// Result:
+//    All individual channel plots on the GUI will stop scrolling if previously on or
+//    start scrolling if previously off.
+// This does not stop data from being sent to the device. Rather, it halts the display
+// of new data at user's will. This cmd is used by the "ToggleAutoscroll" button.
+void Cmd_ToggleAutoscroll(){
+  if (toggleCounter % 2 == 0) { // if even, stop the scroll
+    PD1TSA.Run(false);
+    PD2TSA.Run(false);
+    PD3TSA.Run(false);
+    PD1TSB.Run(false);
+    PD2TSB.Run(false);
+    PD3TSB.Run(false);
+  } else { // if odd, start the scroll
+    PD1TSA.Run(true);
+    PD2TSA.Run(true);
+    PD3TSA.Run(true);
+    PD1TSB.Run(true);
+    PD2TSB.Run(true);
+    PD3TSB.Run(true);
+  }
+  toggleCounter++; // keep track of number times function called
+}
+
+// Cmd_MarkPlotPoint sends a visible data point at the current point in time, this point is saved
+// in the .csv file.
+// Ex.
+//    '!MarkPlotPoint \r\n'
+// Result:
+//    A dot can be seen in the time plots. The .csv file will contain the exact times when this command
+//    is used.
+// Cmd is used by "Calibrate" and "Remove Calibration" buttons.
+void Cmd_MarkPlotPoint(){
+  MarkedPoints.SendData("MarkedPoints", 5, Plot::Cyan, Plot::Dotted);
+}
+
+// Cmd_SetTimeRange sets the range of the x-axis by number of minutes.
+// Ex.
+//    '!Cmd_SetTimeRange 15 \r\n'
+// Result:
+//    Sets the x-axis range of all time plots to be 15 minutes in duration.
+// If the parameter is 0, the function will set the range to 30 seconds. This cmd is
+// used by the "Apply Range" button.
+void Cmd_SetTimeRange(CommandParameter &Parameters){
+  int numMinutes = Parameters.NextParameterAsInteger();
+  if (numMinutes == 0) { // if 0 minutes, set to 30 seconds
+    PD1TSA.SetXRange(0.5/60);
+    PD2TSA.SetXRange(0.5/60);
+    PD3TSA.SetXRange(0.5/60);
+    PD1TSB.SetXRange(0.5/60);
+    PD2TSB.SetXRange(0.5/60);
+    PD3TSB.SetXRange(0.5/60);
+  } else { // if not 0 minutes, set to number of minutes given
+    PD1TSA.SetXRange( ((float)numMinutes)/60 );
+    PD2TSA.SetXRange( ((float)numMinutes)/60 );
+    PD3TSA.SetXRange( ((float)numMinutes)/60 );
+    PD1TSB.SetXRange( ((float)numMinutes)/60 );
+    PD2TSB.SetXRange( ((float)numMinutes)/60 );
+    PD3TSB.SetXRange( ((float)numMinutes)/60 );
+  }
+}
+
+// Cmd_SetYAxis updates the y-axis scale for the individual time plots on the GUI.
+// Ex.
+//    '!SetYAxis 0 12000 0 0 0 1 1 1 \r\n'
 // Result:
 //    All NIR channel time plots on the GUI will begin at 0 and end at 12000.
 //
 // Ex.
-//    '!UpdateYAxis 0 5000 1 1 1 0 0 0 \r\n'
+//    '!SetYAxis 0 5000 1 1 1 0 0 0 \r\n'
 // Result:
 //    All RED channel time plots on the GUI will begin at 0 and end at 5000.
 // This cmd is used by the "Set y-axis" button on the GUI.
-void Cmd_UpdateYAxis(CommandParameter &Parameters){
+void Cmd_SetYAxis(CommandParameter &Parameters){
   word YAxisLowerBound = Parameters.NextParameterAsInteger();
   word YAxisUpperBound = Parameters.NextParameterAsInteger();
 
@@ -657,34 +738,27 @@ void Cmd_UpdateYAxis(CommandParameter &Parameters){
   bool PD3NIRSelected = (bool)Parameters.NextParameterAsInteger();
 
   // update left and right y-axis scales for RED channel
-  // PD1
   if (PD1RSelected) {
     PD1TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD1TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
   }
-  // PD2
   if (PD2RSelected) {
     PD2TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD2TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
   }
-  // PD3
   if (PD3RSelected) {
     PD3TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD3TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
   }
-
-  // update left and right y-axis scales for NIR channel
-  // PD1
+  // update NIR channel
   if (PD1NIRSelected) {
     PD1TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD1TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
   }
-  // PD2
   if (PD2NIRSelected) {
     PD2TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD2TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
   }
-  // PD3
   if (PD3NIRSelected) {
     PD3TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
     PD3TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
@@ -696,7 +770,8 @@ void Cmd_UpdateYAxis(CommandParameter &Parameters){
   Serial.println(YAxisUpperBound);
 }
 
-// Cmd_SetYAxisCheckboxes updates the status of the checkboxes in the "Plot Controls" tab in MegunoLink.
+// Cmd_SetYAxisCheckboxes updates the status of the checkboxes in the "Plot Controls"
+// tab in MegunoLink.
 // Ex.
 //    '!SetYAxisCheckboxes 0 0 0 0 0 0 \r\n'
 // Result:
@@ -718,8 +793,57 @@ void Cmd_SetYAxisCheckboxes(CommandParameter &Parameters){
 //    The GUI will display the upper and lower bounds as 9000 and 0, respectively.
 // This cmd is used by the "Set Y-axis to Default" and "Remove Calibration" buttons on the GUI.
 void Cmd_SetYAxisUIValues(CommandParameter &Parameters){
-  MyPanel.SetNumber(F("YAxisLower"), Parameters.NextParameterAsInteger());
-  MyPanel.SetNumber(F("YAxisUpper"), Parameters.NextParameterAsInteger());
+  int lower = Parameters.NextParameterAsInteger();
+  int upper = Parameters.NextParameterAsInteger();
+  MyPanel.SetNumber(F("YAxisLower"), lower);
+  MyPanel.SetNumber(F("YAxisUpper"), upper);
+  MyPanel.SetNumber(F("YAxisLowerDP"), lower);
+  MyPanel.SetNumber(F("YAxisUpperDP"), upper);
+}
+
+// Cmd_SetBoundsToDefault sets bounds of x and y axes to their default values.
+// Ex.
+//    '!SetBoundsToDefault \r\n'
+// Result:
+//    All timeplot bounds will be reset to their default value (x = 2min range, y = 0-10)
+// This is used by the "Set Bounds to Default" button.
+void Cmd_SetBoundsToDefault(){
+  // reset y-axis bounds
+  // RED
+  PD1TSA.SetYRange(0, 10);
+  PD1TSA.SetY2Range(0, 10);
+  PD2TSA.SetYRange(0, 10);
+  PD2TSA.SetY2Range(0, 10);
+  PD3TSA.SetYRange(0, 10);
+  PD3TSA.SetY2Range(0, 10);
+  // NIR
+  PD1TSB.SetYRange(0, 10);
+  PD1TSB.SetY2Range(0, 10);
+  PD2TSB.SetYRange(0, 10);
+  PD2TSB.SetY2Range(0, 10);
+  PD3TSB.SetYRange(0, 10);
+  PD3TSB.SetY2Range(0, 10);
+
+  // reset x-axis bounds
+  Cmd_SetTimeRangeToDefault();
+}
+
+// Cmd_SetTimeRangeToDefault sets time range to 2 minutes, updates GUI to reflect change.
+// Ex.
+//    '!SetTimeRangeToDefault \r\n'
+// Result:
+//    Time plots are set to 2 minute range on x-axis. "Time Range Options" valuebox reflects change.
+// This cmd is used by the "Set X-axis to Default" button.
+void Cmd_SetTimeRangeToDefault(){
+  PD1TSA.SetXRange(2.0/60); // 2 minutes (# minutes/# min. in hour)
+  PD2TSA.SetXRange(2.0/60);
+  PD3TSA.SetXRange(2.0/60);
+  PD1TSB.SetXRange(2.0/60);
+  PD2TSB.SetXRange(2.0/60);
+  PD3TSB.SetXRange(2.0/60);
+
+  MyPanel.SetListValue(F("XAxisRangeOptions"), 2);
+  MyPanel.SetListValue(F("XAxisRangeOptionsDP"), 2);
 }
 
 // Cmd_SetControlsToDefault sets the GUI numbers to their default values.
@@ -738,7 +862,7 @@ void Cmd_SetControlsToDefault(){
 }
 // End MegunoLink function to recieve data from interface panel
 
-// Helper function for afeReadData, sets calibration to default values.
+// Helper function invoked inside afeReadData, sets calibration to default values.
 void SetCalibrationToDefault(){
   PD1R_calibration_val = 1;
   PD2R_calibration_val = 1;
@@ -747,18 +871,6 @@ void SetCalibrationToDefault(){
   PD2IR_calibration_val = 1;
   PD3IR_calibration_val = 1;
 }
-
-//BEGIN function to send all register values to chart in megunolink
-void ReadAllRegisters(){
-  int count = 0;
-  while(count<51){
-    word value = i2cRead2Bytes(AFE_I2C_ADDRESS, Registers[count]);
-    MyTable.SendData(Registers[count], value, "Register, Value (decimal)");
-    count = count +1;
-  }
-}
-//END function to send all register values to chart in megunolink
-
 // end - user defined functions******************************
 
 // begin - setup*********************************************
@@ -797,14 +909,24 @@ void setup() {
   SerialCommandHandler.AddCommand(F("Calibrate"), Cmd_Calibrate);
   // Adds "!SetCalibrationSetting" to allow the choice of using a pre-existing hard-coded calibration setting
   SerialCommandHandler.AddCommand(F("SetCalibrationSetting"), Cmd_SetCalibrationSetting);
-  // Adds "!UpdateYAxis" function to change y-axis boundaries
-  SerialCommandHandler.AddCommand(F("UpdateYAxis"), Cmd_UpdateYAxis);
+  // Adds "!SetYAxis" function to change y-axis boundaries
+  SerialCommandHandler.AddCommand(F("SetYAxis"), Cmd_SetYAxis);
   // Adds "!SetControlsToDefault" function to set GUI controls to display default values.
   SerialCommandHandler.AddCommand(F("SetControlsToDefault"), Cmd_SetControlsToDefault);
   // Adds "!SetYAxisCheckboxes" function to set GUI checkboxes to a specific configuration.
   SerialCommandHandler.AddCommand(F("SetYAxisCheckboxes"), Cmd_SetYAxisCheckboxes);
   // Adds "!SetYAxisToDefault" function to set the y-axis of time plots to default.
   SerialCommandHandler.AddCommand(F("SetYAxisUIValues"), Cmd_SetYAxisUIValues);
+  // Adds "!ToggleAutoscroll" function to disable or enable autoscrolling.
+  SerialCommandHandler.AddCommand(F("ToggleAutoscroll"), Cmd_ToggleAutoscroll);
+  // Adds "!SetBoundsToDefault" function to set individual plots to their default x, y-axis bounds.
+  SerialCommandHandler.AddCommand(F("SetBoundsToDefault"), Cmd_SetBoundsToDefault);
+  // Adds "!SetTimeRange" function to set the x-axis range in terms of minutes.
+  SerialCommandHandler.AddCommand(F("SetTimeRange"), Cmd_SetTimeRange);
+  // Adds "!SetTimeRangeToDefault" function to reset x-axis bounds to 2 minutes.
+  SerialCommandHandler.AddCommand(F("SetTimeRangeToDefault"), Cmd_SetTimeRangeToDefault);
+  // Adds "!MarkPlotPoint" function to mark certain points in the data to aid in the identification of important data regions
+  SerialCommandHandler.AddCommand(F("MarkPlotPoint"), Cmd_MarkPlotPoint);
 
   // reset watchdog timer at end of setup
   wdt_reset();  
@@ -827,15 +949,10 @@ void loop() {
   SerialCommandHandler.Process();
   // AFE modify config flag is set when MegunoLink sends command
   if (afeModConfigFlag == true) {
-    if (mlRegMod == 244){
-      DataMark.SendData("DataMark", 100);
-    }
-    else{
     // update AFE configuration per MegunoLink command
-      Serial.print("mlByteMod");
-      Serial.println(mlByteMod);
-      afeModConfig(mlRegMod, mlByteMod, mlValMod);
-    }
+    Serial.print("mlByteMod");
+    Serial.println(mlByteMod);
+    afeModConfig(mlRegMod, mlByteMod, mlValMod);
     // reset AFE modify config flag
     afeModConfigFlag = false;
   } // end - AFE modify config
