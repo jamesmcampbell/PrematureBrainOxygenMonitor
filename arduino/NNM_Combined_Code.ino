@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Revised and modified by David J. Kim (5/20/24)
+ * Last revised and modified by David J. Kim on 5/21/24
  */
 
 // begin - define constants**********************************
@@ -572,6 +572,7 @@ void Cmd_MlReceive( CommandParameter &Parameters){
 //    PD1IR_calibration_val -> 4000
 //    PD2IR_calibration_val -> 5000
 //    PD3IR_calibration_val -> 6000
+// This cmd is used by the calibration buttons on the GUI.
 void Cmd_Calibrate(CommandParameter &Parameters){
   PD1R_calibration_val = Parameters.NextParameterAsInteger();
   PD2R_calibration_val = Parameters.NextParameterAsInteger();  
@@ -594,36 +595,100 @@ void Cmd_Calibrate(CommandParameter &Parameters){
   Serial.println(PD3IR_calibration_val);
 }
 
+// Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
+// Ex.
+//    '!SetCalibrationSetting 0 \r\n'
+// Result:
+//    Used in conjunction with the combo value list on the GUI, this selects 1 of 4 hard-coded calibration settings.
+// This cmd is used by the "Apply Calibration" button on the GUI.
+void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
+  int CalibrationSelection = Parameters.NextParameterAsInteger();
+  if (CalibrationSelection == 0) {
+    PD1R_calibration_val = 586;
+    PD2R_calibration_val = 586;
+    PD3R_calibration_val = 1236;
+    PD1IR_calibration_val = 2420;
+    PD2IR_calibration_val = 2363;
+    PD3IR_calibration_val = 2051;
+  } else if (CalibrationSelection == 1) {
+    PD1R_calibration_val = 1;
+    PD2R_calibration_val = 1;
+    PD3R_calibration_val = 1;
+    PD1IR_calibration_val = 1;
+    PD2IR_calibration_val = 1;
+    PD3IR_calibration_val = 1;
+  } else if (CalibrationSelection == 2) {
+    PD1R_calibration_val = 2;
+    PD2R_calibration_val = 1;
+    PD3R_calibration_val = 1;
+    PD1IR_calibration_val = 1;
+    PD2IR_calibration_val = 1;
+    PD3IR_calibration_val = 1;
+  } else if (CalibrationSelection == 3) {
+    PD1R_calibration_val = 3;
+    PD2R_calibration_val = 1;
+    PD3R_calibration_val = 1;
+    PD1IR_calibration_val = 1;
+    PD2IR_calibration_val = 1;
+    PD3IR_calibration_val = 1;
+  }
+}
+
 // Cmd_UpdateYAxis updates the y-axis scale for the individual time plots on the GUI.
 // Ex.
-//    '!UpdateYAxis 0 12000 \r\n'
+//    '!UpdateYAxis 0 12000 0 0 0 1 1 1 \r\n'
 // Result:
-//    All time plots on the GUI will begin at 0 and end at 12000.
+//    All NIR channel time plots on the GUI will begin at 0 and end at 12000.
+//
+// Ex.
+//    '!UpdateYAxis 0 5000 1 1 1 0 0 0 \r\n'
+// Result:
+//    All RED channel time plots on the GUI will begin at 0 and end at 5000.
+// This cmd is used by the "Set y-axis" button on the GUI.
 void Cmd_UpdateYAxis(CommandParameter &Parameters){
   word YAxisLowerBound = Parameters.NextParameterAsInteger();
   word YAxisUpperBound = Parameters.NextParameterAsInteger();
 
+  bool PD1RSelected = (bool)Parameters.NextParameterAsInteger();
+  bool PD2RSelected = (bool)Parameters.NextParameterAsInteger();
+  bool PD3RSelected = (bool)Parameters.NextParameterAsInteger();
+  bool PD1NIRSelected = (bool)Parameters.NextParameterAsInteger();
+  bool PD2NIRSelected = (bool)Parameters.NextParameterAsInteger();
+  bool PD3NIRSelected = (bool)Parameters.NextParameterAsInteger();
+
   // update left and right y-axis scales for RED channel
   // PD1
-  PD1TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD1TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD1RSelected) {
+    PD1TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD1TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
   // PD2
-  PD2TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD2TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD2RSelected) {
+    PD2TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD2TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
   // PD3
-  PD3TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD3TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD3RSelected) {
+    PD3TSA.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD3TSA.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
 
   // update left and right y-axis scales for NIR channel
   // PD1
-  PD1TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD1TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD1NIRSelected) {
+    PD1TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD1TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
   // PD2
-  PD2TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD2TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD2NIRSelected) {
+    PD2TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD2TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
   // PD3
-  PD3TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
-  PD3TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  if (PD3NIRSelected) {
+    PD3TSB.SetYRange(YAxisLowerBound, YAxisUpperBound);
+    PD3TSB.SetY2Range(YAxisLowerBound, YAxisUpperBound);
+  }
 
   Serial.print("YAxisLowerBound: ");
   Serial.println(YAxisLowerBound);
@@ -631,11 +696,38 @@ void Cmd_UpdateYAxis(CommandParameter &Parameters){
   Serial.println(YAxisUpperBound);
 }
 
+// Cmd_SetYAxisCheckboxes updates the status of the checkboxes in the "Plot Controls" tab in MegunoLink.
+// Ex.
+//    '!SetYAxisCheckboxes 0 0 0 0 0 0 \r\n'
+// Result:
+//    All checkboxes are unchecked.
+// This cmd is used by the "Select All" and "Clear" buttons on the GUI.
+void Cmd_SetYAxisCheckboxes(CommandParameter &Parameters){
+  MyPanel.SetCheck(F("PD1RED_Check"), (bool)Parameters.NextParameterAsInteger());
+  MyPanel.SetCheck(F("PD2RED_Check"), (bool)Parameters.NextParameterAsInteger());
+  MyPanel.SetCheck(F("PD3RED_Check"), (bool)Parameters.NextParameterAsInteger());
+  MyPanel.SetCheck(F("PD1NIR_Check"), (bool)Parameters.NextParameterAsInteger());
+  MyPanel.SetCheck(F("PD2NIR_Check"), (bool)Parameters.NextParameterAsInteger());
+  MyPanel.SetCheck(F("PD3NIR_Check"), (bool)Parameters.NextParameterAsInteger());
+}
+
+// Cmd_SetYAxisUIValues sets the y-axis upper and lower bounds to given values.
+// Ex.
+//    '!SetYAxisUIValues 0 9000 \r\n'
+// Result:
+//    The GUI will display the upper and lower bounds as 9000 and 0, respectively.
+// This cmd is used by the "Set Y-axis to Default" and "Remove Calibration" buttons on the GUI.
+void Cmd_SetYAxisUIValues(CommandParameter &Parameters){
+  MyPanel.SetNumber(F("YAxisLower"), Parameters.NextParameterAsInteger());
+  MyPanel.SetNumber(F("YAxisUpper"), Parameters.NextParameterAsInteger());
+}
+
 // Cmd_SetControlsToDefault sets the GUI numbers to their default values.
 // Ex.
 //    '!SetControlsToDefault \r\n'
 // Result:
 //    All device settings will display their default values.
+// This cmd is used by the "Set to Default" button on the GUI.
 void Cmd_SetControlsToDefault(){
   MyPanel.SetNumber(F("RedLEDCoarse"), 10);
   MyPanel.SetNumber(F("NIRLEDCoarse"), 10);
@@ -646,7 +738,7 @@ void Cmd_SetControlsToDefault(){
 }
 // End MegunoLink function to recieve data from interface panel
 
-// helper function for afeReadData, sets calibration to default values
+// Helper function for afeReadData, sets calibration to default values.
 void SetCalibrationToDefault(){
   PD1R_calibration_val = 1;
   PD2R_calibration_val = 1;
@@ -701,12 +793,18 @@ void setup() {
   // Adds "!MlReceive" function to receive data from Meguno via serial
   SerialCommandHandler.AddCommand(F("MlReceive"), Cmd_MlReceive);
   SerialCommandHandler.AddCommand(F("MlRequest"), Cmd_MlRequest);
-  // Adds "!Calibrate" function to set calibration values
+  // Adds "!Calibrate" function to directly set calibration values
   SerialCommandHandler.AddCommand(F("Calibrate"), Cmd_Calibrate);
+  // Adds "!SetCalibrationSetting" to allow the choice of using a pre-existing hard-coded calibration setting
+  SerialCommandHandler.AddCommand(F("SetCalibrationSetting"), Cmd_SetCalibrationSetting);
   // Adds "!UpdateYAxis" function to change y-axis boundaries
   SerialCommandHandler.AddCommand(F("UpdateYAxis"), Cmd_UpdateYAxis);
   // Adds "!SetControlsToDefault" function to set GUI controls to display default values.
   SerialCommandHandler.AddCommand(F("SetControlsToDefault"), Cmd_SetControlsToDefault);
+  // Adds "!SetYAxisCheckboxes" function to set GUI checkboxes to a specific configuration.
+  SerialCommandHandler.AddCommand(F("SetYAxisCheckboxes"), Cmd_SetYAxisCheckboxes);
+  // Adds "!SetYAxisToDefault" function to set the y-axis of time plots to default.
+  SerialCommandHandler.AddCommand(F("SetYAxisUIValues"), Cmd_SetYAxisUIValues);
 
   // reset watchdog timer at end of setup
   wdt_reset();  
