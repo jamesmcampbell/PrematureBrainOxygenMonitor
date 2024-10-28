@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 6/22/24
+ * Last revised and modified by David J. Kim on 10/28/24
  */
 
 // begin - define constants**********************************
@@ -249,6 +249,7 @@ byte Registers[] ={
     AFE_FIFO_ACCESS_REG
   };
   //end array with registers stored 
+
 bool afeModConfigFlag = false;   // AFE modify configuration flag
 bool afeReadDataFlag = false;   // AFE read data registers flag
 bool afeRequestInfoFlag = false;  //AFE request register without editing flag
@@ -260,11 +261,11 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   word mlByteMod = 0x0000;
 
 // variables to store default y-axis values
-int yAxisLowerDefault = 0;
-int yAxisUpperDefault = 10;
+const int YAXIS_LOWER_DEFAULT = 0;
+const int YAXIS_UPPER_DEFAULT = 10;
 
 // variable to store default time range value (in minutes)
-int timeRangeDefault = 2;
+const int TIME_RANGE_DEFAULT = 2;
 
 // variables to store photodiode data
 float PD1R_calibrated = 0.0;
@@ -291,6 +292,7 @@ unsigned int toggleAutoScrollCounter = 0;
 // used by 'Cmd_ToggleDataStream'
 unsigned int toggleDataStreamCounter = 0;
 // end - global variables************************************
+
 
 // begin - user defined functions****************************
 // ISR for AFE read-to-read interrupt
@@ -815,19 +817,19 @@ void Cmd_SetBoundsToDefault(){
 // This cmd is used by the "Set Y-axis to Default" button.
 void Cmd_SetYAxisToDefault(){
   // RED channel
-  PD1TSA.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD1TSA.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
-  PD2TSA.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD2TSA.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
-  PD3TSA.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD3TSA.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
+  PD1TSA.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD1TSA.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD2TSA.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD2TSA.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD3TSA.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD3TSA.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
   // NIR channel
-  PD1TSB.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD1TSB.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
-  PD2TSB.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD2TSB.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
-  PD3TSB.SetYRange(yAxisLowerDefault, yAxisUpperDefault);
-  PD3TSB.SetY2Range(yAxisLowerDefault, yAxisUpperDefault);
+  PD1TSB.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD1TSB.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD2TSB.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD2TSB.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD3TSB.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
+  PD3TSB.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
 }
 
 // Cmd_SetTimeRangeToDefault sets time range to 2 minutes, updates GUI to reflect change.
@@ -837,15 +839,15 @@ void Cmd_SetYAxisToDefault(){
 //    Time plots are set to 2 minute range on x-axis. "Time Range Options" valuebox reflects change.
 // This cmd is used by the "Set X-axis to Default" button.
 void Cmd_SetTimeRangeToDefault(){
-  PD1TSA.SetXRange((float)timeRangeDefault / 60); // 2 minutes (# min./# min. in hour)
-  PD2TSA.SetXRange((float)timeRangeDefault / 60);
-  PD3TSA.SetXRange((float)timeRangeDefault / 60);
-  PD1TSB.SetXRange((float)timeRangeDefault / 60);
-  PD2TSB.SetXRange((float)timeRangeDefault / 60);
-  PD3TSB.SetXRange((float)timeRangeDefault / 60);
+  PD1TSA.SetXRange((float)TIME_RANGE_DEFAULT / 60); // 2 minutes (# min./# min. in hour)
+  PD2TSA.SetXRange((float)TIME_RANGE_DEFAULT / 60);
+  PD3TSA.SetXRange((float)TIME_RANGE_DEFAULT / 60);
+  PD1TSB.SetXRange((float)TIME_RANGE_DEFAULT / 60);
+  PD2TSB.SetXRange((float)TIME_RANGE_DEFAULT / 60);
+  PD3TSB.SetXRange((float)TIME_RANGE_DEFAULT / 60);
 
-  MyPanel.SetListValue(F("XAxisRangeOptions"), timeRangeDefault);
-  MyPanel.SetListValue(F("XAxisRangeOptionsDP"), timeRangeDefault);
+  MyPanel.SetListValue(F("XAxisRangeOptions"), TIME_RANGE_DEFAULT);
+  MyPanel.SetListValue(F("XAxisRangeOptionsDP"), TIME_RANGE_DEFAULT);
 }
 
 // Cmd_SetControlsToDefault sets the GUI numbers to their default values.
