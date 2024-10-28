@@ -5,7 +5,7 @@
  * @authors Adam Gibson, Joel Elliot
  * @version X7
  * 
- * Compatible with MegunoLink X5, X6, & X7
+ * Compatible with MegunoLink X5, X6, X7, & X8
  * 
  * Purpose:
  * Provide a starting point for the combined code structure
