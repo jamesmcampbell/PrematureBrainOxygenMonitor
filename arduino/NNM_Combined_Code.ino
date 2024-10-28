@@ -3,9 +3,6 @@
  * NNM Capstone Project 2022-2023
  * 
  * @authors Adam Gibson, Joel Elliot
- * @version X7
- * 
- * Compatible with MegunoLink X5, X6, X7, & X8
  * 
  * Purpose:
  * Provide a starting point for the combined code structure
@@ -15,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Revised and modified by David J. Kim
+ * Revised and modified by David J. Kim (5/12/24)
  */
 
 // begin - define constants**********************************
@@ -124,16 +121,16 @@
 #define AFE_MODE_PRGM_VALUE                   0X0001  // address 0x10
 #define AFE_MODE_NRM_VALUE                    0X0002  // address 0x10
 #define AFE_SLOT_EN_PUP_VALUE                 0x1021  // address 0x11
-#define AFE_FSAMPLE_PUP_VALUE                 0x0050  // address 0x12
+#define AFE_FSAMPLE_PUP_VALUE                 0x01F4  // address 0x12
 #define AFE_PD_LED_SELECT_PUP_VALUE           0x0559  // address 0x14
-#define AFE_NUM_AVG_PUP_VALUE                 0x0000  // address 0x15
-#define AFE_SLOTA_CH1_OFFSET_PUP_VALUE        0x1F00  // address 0x18
-#define AFE_SLOTA_CH2_OFFSET_PUP_VALUE        0x1F00  // address 0x19
-#define AFE_SLOTA_CH3_OFFSET_PUP_VALUE        0x1F00  // address 0x1A
+#define AFE_NUM_AVG_PUP_VALUE                 0x0550  // address 0x15
+#define AFE_SLOTA_CH1_OFFSET_PUP_VALUE        0x1E78  // address 0x18
+#define AFE_SLOTA_CH2_OFFSET_PUP_VALUE        0x1E78  // address 0x19
+#define AFE_SLOTA_CH3_OFFSET_PUP_VALUE        0x1E78  // address 0x1A
 #define AFE_SLOTA_CH4_OFFSET_PUP_VALUE        0x3FFF  // address 0x1B
-#define AFE_SLOTB_CH1_OFFSET_PUP_VALUE        0x1F00  // address 0x1E
-#define AFE_SLOTB_CH2_OFFSET_PUP_VALUE        0x1F00  // address 0x1F
-#define AFE_SLOTB_CH3_OFFSET_PUP_VALUE        0x1F00  // address 0x20
+#define AFE_SLOTB_CH1_OFFSET_PUP_VALUE        0x1E78  // address 0x1E
+#define AFE_SLOTB_CH2_OFFSET_PUP_VALUE        0x1E78  // address 0x1F
+#define AFE_SLOTB_CH3_OFFSET_PUP_VALUE        0x1E78  // address 0x20
 #define AFE_SLOTB_CH4_OFFSET_PUP_VALUE        0x3FFF  // address 0x21
 //#define AFE_ILED3_COARSE_PUP_VALUE            0x3000  // address 0x22
 #define AFE_ILED1_COARSE_PUP_VALUE            0x300A  // address 0x23
@@ -149,9 +146,9 @@
 #define AFE_SLOTA_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x39
 #define AFE_SLOTB_AFE_WINDOW_PUP_VALUE        0x21FE  // address 0x3B
 //#define AFE_AFE_PWR_CFG1_PUP_VALUE            0x3006  // address 0x3C
-//#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C38  // address 0x42
+#define AFE_SLOTA_TIA_CFG_PUP_VALUE           0x1C38  // address 0x42
 //#define AFE_SLOTA_AFE_CFG_PUP_VALUE           0xADA5  // address 0x43
-//#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C38  // address 0x44
+#define AFE_SLOTB_TIA_CFG_PUP_VALUE           0x1C38  // address 0x44
 //#define AFE_SLOTB_AFE_CFG_PUP_VALUE           0xADA5  // address 0x45
 #define AFE_SAMPLE_CLK_PUP_VALUE              0x26A2  // address 0x4B
 //#define AFE_CLK32M_ADJUST_PUP_VALUE           0x0098  // address 0x4D
@@ -188,7 +185,7 @@ InterfacePanel MyPanel;
 //Adds handle to send data to megunolink tables 
 Table MyTable;
 // Adds a handle to update no graph items on interface panel  
-CommandHandler<> SerialCommandHandler; 
+CommandHandler<10, 60> SerialCommandHandler; 
 //Allows serial commands to be processed 
 //End Meguno handles 
 
@@ -258,6 +255,17 @@ bool afeRequestInfoFlag = false;  //AFE request register without editing flag
   word mlValMod = 0x0000;
   // 16 bit word bytes that will be modified 
   word mlByteMod = 0x0000;
+
+  // calibration values for each photodiode and channel
+  // PD1
+  word PD1R_calibration_val = 1;
+  word PD1IR_calibration_val = 1;
+  // PD2
+  word PD2R_calibration_val = 1;
+  word PD2IR_calibration_val = 1;
+  // PD3
+  word PD3R_calibration_val = 1;
+  word PD3IR_calibration_val = 1;
 // end - global variables************************************
 
 // begin - user defined functions****************************
@@ -301,7 +309,11 @@ word i2cRead2Bytes(byte i2cRAdrs, byte i2cRReg) {
   // complete transmission
   Wire.endTransmission();
   // request 2 bytes from AFE, read from HIGH byte first
-  Wire.requestFrom(i2cRAdrs, 2);
+
+  // FIXED Wire.h issue, compiler could not decide which requestFrom() func to use,
+  // adding (byte) type conversions removes this ambiguity
+  Wire.requestFrom( (byte) i2cRAdrs, (byte) 2);
+
   // wait for afe response
   while(Wire.available()) {
     // receive bytes
@@ -474,23 +486,50 @@ void afeReadData() {
   word afePd3TSB16 = i2cRead2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_PD3_16BIT_REG);
 
   // release time slots A&B data to allow sample updates to data registers
-  i2cWrite2Bytes(AFE_I2C_ADDRESS,AFE_DATA_ACCESS_CTL_REG, AFE_DATA_ACCESS_CTL_PUP_VALUE);
+  i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_DATA_ACCESS_CTL_REG, AFE_DATA_ACCESS_CTL_PUP_VALUE);
   
   // updated SendData calls to add PD2 & PD3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   // Begin Routing to MegunLink
+  // //Writes data from photodiode 1 timeslot A to graph channel PD1TSA
+  // PD1TSA.SendData(F("PD1RED"), afePd1TSA16);
+  // //Writes data from photodiode 2 timeslot A to graph channel PD2TSA
+  // PD2TSA.SendData(F("PD2RED"), afePd2TSA16);
+  // //Writes data from photodiode 3 timeslot A to graph channel PD3TSA
+  // PD3TSA.SendData(F("PD3RED"), afePd3TSA16);
+
+  // //Writes data from photodiode 1 timeslot B to graph channel PD1TSB
+  // PD1TSB.SendData(F("PD1IR"), afePd1TSB16);
+  // //Writes data from photodiode 2 timeslot B to graph channel PD2TSB
+  // PD2TSB.SendData(F("PD2IR"), afePd2TSB16);
+  // //Writes data from photodiode 3 timeslot B to graph channel PD3TSB
+  // PD3TSB.SendData(F("PD3IR"), afePd3TSB16);
+
+
+  // FOR TESTING PURPOSES 
+
+  if ((PD1R_calibration_val == 0) || (PD2R_calibration_val == 0) || (PD3R_calibration_val == 0) ||
+      (PD1IR_calibration_val == 0) || (PD2IR_calibration_val == 0) || (PD3IR_calibration_val == 0)) {
+        SetCalibrationToDefault();
+        Serial.println("\nERROR: Calibration values cannot be 0.");
+      }
+  
   //Writes data from photodiode 1 timeslot A to graph channel PD1TSA
-  PD1TSA.SendData(F("PD1RED"), afePd1TSA16);
+  PD1TSA.SendData(F("PD1RED"), ((float)afePd1TSA16)/PD1R_calibration_val);
   //Writes data from photodiode 2 timeslot A to graph channel PD2TSA
-  PD2TSA.SendData(F("PD2RED"), afePd2TSA16);
+  PD2TSA.SendData(F("PD2RED"), ((float)afePd2TSA16)/PD2R_calibration_val);
   //Writes data from photodiode 3 timeslot A to graph channel PD3TSA
-  PD3TSA.SendData(F("PD3RED"), afePd3TSA16);
+  PD3TSA.SendData(F("PD3RED"), ((float)afePd3TSA16)/PD3R_calibration_val);
+
   //Writes data from photodiode 1 timeslot B to graph channel PD1TSB
-  PD1TSB.SendData(F("PD1IR"), afePd1TSB16);
+  PD1TSB.SendData(F("PD1IR"), ((float)afePd1TSB16)/PD1IR_calibration_val);
   //Writes data from photodiode 2 timeslot B to graph channel PD2TSB
-  PD2TSB.SendData(F("PD2IR"), afePd2TSB16);
+  PD2TSB.SendData(F("PD2IR"), ((float)afePd2TSB16)/PD2IR_calibration_val);
   //Writes data from photodiode 3 timeslot B to graph channel PD3TSB
-  PD3TSB.SendData(F("PD3IR"), afePd3TSB16);
-  // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PD3TSB.SendData(F("PD3IR"), ((float)afePd3TSB16)/PD3IR_calibration_val);
+
+  //
+
+  // // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //End Routing to MegunoLink
 
   // to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -537,7 +576,50 @@ void Cmd_MlReceive( CommandParameter &Parameters){
   Serial.print("mlValMod at input");
   Serial.println(mlValMod);
 }
-// End MegunoLink function to recieve data from interface panel 
+
+// Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
+// Ex.
+//    '!Calibrate 1000 2000 3000 4000 5000 6000\r\n'
+//    
+// In code:
+//    PD1R_calibration_val -> 1000
+//    PD2R_calibration_val -> 2000
+//    PD3R_calibration_val -> 3000
+//    PD1IR_calibration_val -> 4000
+//    PD2IR_calibration_val -> 5000
+//    PD3IR_calibration_val -> 6000
+//
+void Cmd_Calibrate(CommandParameter &Parameters){
+  PD1R_calibration_val = Parameters.NextParameterAsInteger();
+  PD2R_calibration_val = Parameters.NextParameterAsInteger();  
+  PD3R_calibration_val = Parameters.NextParameterAsInteger();
+  PD1IR_calibration_val = Parameters.NextParameterAsInteger();
+  PD2IR_calibration_val = Parameters.NextParameterAsInteger();
+  PD3IR_calibration_val = Parameters.NextParameterAsInteger();
+
+  Serial.print("PD1R_calibration_val: ");
+  Serial.println(PD1R_calibration_val);
+  Serial.print("PD2R_calibration_val: ");
+  Serial.println(PD2R_calibration_val);
+  Serial.print("PD3R_calibration_val: ");
+  Serial.println(PD3R_calibration_val);
+  Serial.print("PD1IR_calibration_val: ");
+  Serial.println(PD1IR_calibration_val);
+  Serial.print("PD2IR_calibration_val: ");
+  Serial.println(PD2IR_calibration_val);
+  Serial.print("PD3IR_calibration_val: ");
+  Serial.println(PD3IR_calibration_val);
+}
+// End MegunoLink function to recieve data from interface panel
+
+void SetCalibrationToDefault(){
+  PD1R_calibration_val = 1;
+  PD2R_calibration_val = 1;
+  PD3R_calibration_val = 1;
+  PD1IR_calibration_val = 1;
+  PD2IR_calibration_val = 1;
+  PD3IR_calibration_val = 1;
+}
 
 //BEGIN function to send all register values to chart in megunolink
 void ReadAllRegisters(){
@@ -581,11 +663,12 @@ void setup() {
   // interrupt triggered on FALLING edge (high to low) of input signal
   attachInterrupt(digitalPinToInterrupt(AFE_DATA_READY), afeReadDataSet, FALLING);
 
-  // Adds "MlReceive" function to receive data from Meguno via serial
+  // Adds "!MlReceive" function to receive data from Meguno via serial
   SerialCommandHandler.AddCommand(F("MlReceive"), Cmd_MlReceive);
-
   SerialCommandHandler.AddCommand(F("MlRequest"), Cmd_MlRequest);
 
+  // Added "!Calibrate" function to set calibration values
+  SerialCommandHandler.AddCommand(F("Calibrate"), Cmd_Calibrate);
 
   //Adds all registers into array
 
