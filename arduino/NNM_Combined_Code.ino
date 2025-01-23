@@ -858,7 +858,7 @@ void Cmd_SetTimeRangeToDefault(){
 // This cmd is used by the "Set to Default" button on the GUI.
 void Cmd_SetControlsToDefault(){
   MyPanel.SetNumber(F("RedLEDCoarse"), 10);
-  MyPanel.SetNumber(F("NIRLEDCoarse"), 10);
+  MyPanel.SetNumber(F("NIRLEDCoarse"), 4);
   MyPanel.SetListValue(F("TIAOptions"), 0);
   MyPanel.SetNumber(F("OFFSET"), 7800);
   MyPanel.SetNumber(F("SampleAVG"), 5);
