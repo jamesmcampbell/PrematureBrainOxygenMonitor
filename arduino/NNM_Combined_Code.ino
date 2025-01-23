@@ -12,7 +12,7 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 1/22/24
+ * Last revised and modified by David J. Kim on 1/22/25
  */
 
 // begin - define constants**********************************
