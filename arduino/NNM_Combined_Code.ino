@@ -134,8 +134,8 @@
 #define AFE_SLOTB_CH4_OFFSET_PUP_VALUE        0x3FFF  // address 0x21
 //#define AFE_ILED3_COARSE_PUP_VALUE            0x3000  // address 0x22
 #define AFE_ILED1_COARSE_PUP_VALUE            0x300A  // address 0x23
-#define AFE_ILED2_COARSE_PUP_VALUE            0x300A  // address 0x24
-//#define AFE_ILED_FINE_PUP_VALUE               0x630C  // address 0x25
+#define AFE_ILED2_COARSE_PUP_VALUE            0x1004  // address 0x24
+#define AFE_ILED_FINE_PUP_VALUE               0x628C  // address 0x25
 #define AFE_SLOTA_LED_PULSE_PUP_VALUE         0x0319  // address 0x30
 #define AFE_SLOTA_NUMPULSES_PUP_VALUE         0x0818  // address 0x31
 //#define AFE_LED_DISABLE_PUP_VALUE             0x0000  // address 0x34
