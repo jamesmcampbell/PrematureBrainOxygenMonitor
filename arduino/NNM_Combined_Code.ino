@@ -12,10 +12,10 @@
  * Arduino Uno connected to an Analog Devices ADPD105 AFE
  * via an I2C converter and a 5V to 1.8V level converter for the GPIO line
  * 
- * Last revised and modified by David J. Kim on 1/22/25
+ * Last revised and modified by David J. Kim on 1/29/25
  */
 
-// begin - define constants**********************************
+// BEGIN - DEFINE CONSTANTS**********************************************
 // I2C slave address of AFE chip
 // single-byte (8-bit)
 #define AFE_I2C_ADDRESS   0x64
@@ -103,10 +103,9 @@
 #define AFE_B_PD3_HIGH_REG              0x7E
 #define AFE_B_PD4_HIGH_REG              0x7F
 
-// AFE configuration register power-up values for all R/W registers
-// if register is commented out, the power-up configuration is
-// the default AFE chip reset value
-// all register values are double-byte (16-bit)
+// AFE configuration register power-up values for all R/W registers if
+// register is commented out, the power-up configuration is the default
+// AFE chip reset value. All register values are double-byte (16-bit).
 //#define AFE_STATUS_PUP_VALUE                  0x0000  // address 0x00
 #define AFE_INT_MASK_PUP_VALUE                0x01FF  // address 0x01
 #define AFE_GPIO_DRV_PUP_VALUE                0x0005  // address 0x02
@@ -163,38 +162,52 @@
 #define AFE_DATA_ACCESS_CTL_HOLD_A_VALUE      0x0002  // address 0x5F
 #define AFE_DATA_ACCESS_CTL_HOLD_B_VALUE      0x0004  // address 0x5F
 #define AFE_DATA_ACCESS_CTL_HOLD_AB_VALUE     0x0006  // address 0x5F
-// end - define constants************************************
 
-// begin - include libraries*********************************
-// include I2C library
-#include <Wire.h>
-// include avr watchdog timer library
-#include <avr/wdt.h>
-// include Meunolink default library 
-#include <MegunoLink.h>
-// include serial comand handler library 
-#include <CommandHandler.h>
-//end - include libraries************************************
+const uint8_t TOTAL_NUMBER_REGISTERS = 51;
 
-// begin Meguno handles
-// Add handles for photodiode 1 timeslot A and B respectivly 
+// variables to store default values on the GUI
+const uint16_t YAXIS_LOWER_DEFAULT = 0;
+const uint16_t YAXIS_UPPER_DEFAULT = 10;
+const uint8_t TIME_RANGE_DEFAULT = 2; // time range value (in minutes)
+const uint8_t RED_LED_COARSE_DEFAULT = 10;
+const uint8_t NIR_LED_COARSE_DEFAULT = 4;
+const uint8_t TIA_OPTION_DEFAULT = 0; // 200K gain default
+const uint8_t SIGNAL_OFFSET_DEFAULT = 6800;
+const uint8_t SAMPLE_AVG_DEFAULT = 1;
+const uint8_t SAMPLE_DEFAULT = 16;
+// END - DEFINE CONSTANTS************************************************
 
-// Adds a handle to send data to meguno time plots
+
+#include <Wire.h> // include I2C library
+#include <avr/wdt.h> // include avr watchdog timer library
+#include <MegunoLink.h> // include Megunolink default library 
+#include <CommandHandler.h> // include serial comand handler library 
+
+
+// BEGIN - MEGUNOLINK HANDLES********************************************
+// add handles for photodiode 1 timeslot A and B respectively 
+
+// adds a handle to send data to meguno time plots
 TimePlot PD1TSA("PD1RED"), PD1TSB("PD1IR"),
          PD2TSA("PD2RED"), PD2TSB("PD2IR"),
          PD3TSA("PD3RED"), PD3TSB("PD3IR"),
          MarkedPoints("MarkedPoints");
-//Adds handle to send data to megunolink tables 
-InterfacePanel MyPanel;
-// Adds a handle to update no graph items on interface panel  
-Table MyTable;
-//Allows serial commands to be processed 
-CommandHandler<20, 60, 10> SerialCommandHandler; 
-//End Meguno handles 
 
-// begin - global variables**********************************
+// adds handle to send data to megunolink tables 
+InterfacePanel MyPanel;
+
+// adds a handle to update no graph items on interface panel  
+Table MyTable;
+
+// allows serial commands to be processed 
+CommandHandler<20, 60, 10> SerialCommandHandler; 
+// END - MEGUNOLINK HANDLES**********************************************
+
+
+// BEGIN - GLOBAL VARIABLES**********************************************
 // declare and initialize global variables
-//begin array to store all registers 
+
+// array to store all registers 
 byte Registers[] ={
     AFE_STATUS_REG,
     AFE_INT_MASK_REG,
@@ -248,24 +261,19 @@ byte Registers[] ={
     AFE_DATA_ACCESS_CTL_REG,
     AFE_FIFO_ACCESS_REG
   };
-  //end array with registers stored 
 
-bool afeModConfigFlag = false;   // AFE modify configuration flag
-bool afeReadDataFlag = false;   // AFE read data registers flag
-bool afeRequestInfoFlag = false;  //AFE request register without editing flag
-  // single-byte (8-bit) AFE register to modify
-  byte mlRegMod = 0x00;
-  // double-byte (16-bit word) value to read into the AFE register
-  word mlValMod = 0x0000;
-  // 16 bit word bytes that will be modified 
-  word mlByteMod = 0x0000;
+bool afeModConfigFlag = false; // AFE modify configuration flag
+bool afeReadDataFlag = false; // AFE read data registers flag
+bool afeRequestInfoFlag = false; // AFE request register without editing flag
 
-// variables to store default y-axis values
-const int YAXIS_LOWER_DEFAULT = 0;
-const int YAXIS_UPPER_DEFAULT = 10;
+// single-byte (8-bit) AFE register to modify
+byte mlRegMod = 0x00;
 
-// variable to store default time range value (in minutes)
-const int TIME_RANGE_DEFAULT = 2;
+// double-byte (16-bit word) value to read into the AFE register
+word mlValMod = 0x0000;
+
+// 16 bit word bytes that will be modified 
+word mlByteMod = 0x0000;
 
 // variables to store photodiode data
 float PD1R_calibrated = 0.0;
@@ -277,36 +285,44 @@ float PD3IR_calibrated = 0.0;
 
 // calibration variables for each photodiode channel
 // used by 'Cmd_Calibrate' and 'Cmd_SetCalibrateSetting'
-word PD1R_calibration_val = 1;
-word PD1IR_calibration_val = 1;
-word PD2R_calibration_val = 1;
-word PD2IR_calibration_val = 1;
-word PD3R_calibration_val = 1;
-word PD3IR_calibration_val = 1;
+uint16_t PD1R_calibration_val = 1;
+uint16_t PD1IR_calibration_val = 1;
+uint16_t PD2R_calibration_val = 1;
+uint16_t PD2IR_calibration_val = 1;
+uint16_t PD3R_calibration_val = 1;
+uint16_t PD3IR_calibration_val = 1;
 
 // variable to store the number of times "Toggle Autoscroll" button is pressed
 // used by 'Cmd_ToggleAutoscroll'
-unsigned int toggleAutoScrollCounter = 0;
+uint8_t toggleAutoScrollCounter = 0;
 
 // variable to store the number of times "Toggle Data Stream" button is pressed
 // used by 'Cmd_ToggleDataStream'
-unsigned int toggleDataStreamCounter = 0;
-// end - global variables************************************
+uint8_t toggleDataStreamCounter = 0;
+// END - GLOBAL VARIABLES************************************************
 
 
-// begin - user defined functions****************************
-// ISR for AFE read-to-read interrupt
+// BEGIN - USER-DEFINED FUNCTIONS****************************************
+
+/**
+ * @brief ISR for AFE read-to-read interrupt.
+ * 
+ */
 void afeReadDataSet() {
-  // set AFE read data flag
-  afeReadDataFlag = true;
-} // end - ISR for AFE read-to-read interrupt
+  afeReadDataFlag = true; // set AFE read data flag
+}
 
-// write 2 bytes via I2C
-// void i2cWrite2Bytes(address, register, value) {}
+/**
+ * @brief Function to write 2 bytes via I2C.
+ * 
+ * @param i2cWAdrs        I2C address to write
+ * @param i2cWReg         AFE register to write to
+ * @param i2cWVal         2-byte value of the write
+ * 
+ */
 void i2cWrite2Bytes(byte i2cWAdrs, byte i2cWReg, word i2cWVal) {
   // declare array to hold 2 bytes for transfer to an AFE register
   byte writeBytes[2];
-
   // load array with 2 bytes
   writeBytes[0] = highByte(i2cWVal);  // HIGH byte
   writeBytes[1] = lowByte(i2cWVal);  // LOW byte
@@ -318,10 +334,16 @@ void i2cWrite2Bytes(byte i2cWAdrs, byte i2cWReg, word i2cWVal) {
   Wire.write(writeBytes, 2);
   // complete transmission
   Wire.endTransmission();
-} // end - write 2 bytes via I2C
+}
 
-// read 2 bytes via I2C
-// 2_bytes_returned i2cRead2Bytes(address, register) {}
+/**
+ * @brief Function to read 2 bytes via I2C.
+ * 
+ * @param i2cRAdrs        I2C address to read
+ * @param i2cRReg         AFE register to read from
+ * @return                word value from register
+ * 
+ */
 word i2cRead2Bytes(byte i2cRAdrs, byte i2cRReg) {
   // declare and initialize variables
   byte readByteHigh = 0;
@@ -351,115 +373,123 @@ word i2cRead2Bytes(byte i2cRAdrs, byte i2cRReg) {
   // start by bitwise shifting 8-bit b1 by 8-bits into the HIGH byte of 16-bit val
   // complete by bitwise OR of the 8-bit b2 with the new 16-bit val
   return readWord = (readByteHigh << 8) | readByteLow;  
-} // end - read 2 bytes via I2C
+}
 
-// enable the 32 kHz sample clock
+/**
+ * @brief Function to enable the 32 kHz sample clock.
+ * 
+ */
 void afeSmplClk() {
   // write to AFE - enable 32 kHz sample clock
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SAMPLE_CLK_REG, AFE_SAMPLE_CLK_PUP_VALUE);
   // read from AFE - check status of 32 kHz sample clock
   word smplClkStatus = i2cRead2Bytes(AFE_I2C_ADDRESS, AFE_SAMPLE_CLK_REG);
 
-  // to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  // TODO: to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   // print the 32 kHz sample clock status
   Serial.print("SAMPLE_CLK running when = 0x26A2: 0x"); 
   Serial.println(smplClkStatus, HEX);
   delay(0.5); // pause to display
   // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-} // end - enable the 32 kHz sample clock
+}
 
-// place the AFE in program mode
+/**
+ * @brief Function to place the AFE in program mode.
+ * 
+ */
 void afePrgmMode() {
   // write to AFE - place AFE in program mode
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_MODE_REG, AFE_MODE_PRGM_VALUE);
   // read from AFE - check status of program mode
   word prgStatus = i2cRead2Bytes(AFE_I2C_ADDRESS, AFE_MODE_REG);
 
-  // to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  // TODO: to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   // print the AFE program mode status
   Serial.print("AFE in program mode when = 0x01: 0x"); 
   Serial.println(prgStatus, HEX);
   delay(0.5); // pause to display  
   // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-} // end - place the AFE in program mode
+}
 
-// load default start-up state into AFE registers
+/**
+ * @brief Function to load default start-up state into AFE registers. Writes to the AFE.
+ * 
+ */
 void afeDfltSup() {
-  // begin start-up configuration to AFE registers#############################
-  // write to AFE - enable the gpio0 output pin on the AFE
+  // enable the gpio0 output pin on the AFE
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_GPIO_DRV_REG, AFE_GPIO_DRV_PUP_VALUE);
 
-  // write to AFE - enable the ready-to-read AFE data register interrupt
+  // enable the ready-to-read AFE data register interrupt
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_GPIO_CTRL_REG, AFE_GPIO_CTRL_PUP_VALUE);
   
-  // write to AFE - enable time slots A and B
+  // enable time slots A and B
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOT_EN_REG, AFE_SLOT_EN_PUP_VALUE);
 
-  // write to AFE - configure the sampling frequency
+  // configure the sampling frequency
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_FSAMPLE_REG, AFE_FSAMPLE_PUP_VALUE);
 
-  // write to AFE - configure the photodiodes connected during each time slot
+  // configure the photodiodes connected during each time slot
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_PD_LED_SELECT_REG, AFE_PD_LED_SELECT_PUP_VALUE);
 
-  // write to AFE - configure the number of sample averages during each time slot
+  // configure the number of sample averages during each time slot
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_NUM_AVG_REG, AFE_NUM_AVG_PUP_VALUE);
 
-  // write to AFE - configure the offset for time slot A, channel 1
+  // configure the offset for time slot A, channel 1, 2, and 3
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_CH1_OFFSET_REG, AFE_SLOTA_CH1_OFFSET_PUP_VALUE);
-
-  // write to AFE - configure the offset for time slot A, channel 2
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_CH2_OFFSET_REG, AFE_SLOTA_CH2_OFFSET_PUP_VALUE);
-
-  // write to AFE - configure the offset for time slot A, channel 3
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_CH3_OFFSET_REG, AFE_SLOTA_CH3_OFFSET_PUP_VALUE);
 
-  // write to AFE - configure the offset for time slot B, channel 1
+  // configure the offset for time slot B, channel 1, 2, and 3
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_CH1_OFFSET_REG, AFE_SLOTB_CH1_OFFSET_PUP_VALUE);
-
-  // write to AFE - configure the offset for time slot B, channel 2
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_CH2_OFFSET_REG, AFE_SLOTB_CH2_OFFSET_PUP_VALUE);
-
-  // write to AFE - configure the offset for time slot B, channel 3
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_CH3_OFFSET_REG, AFE_SLOTB_CH3_OFFSET_PUP_VALUE);
 
-  // write to AFE - configure the LED pulse for time slot A
+  // configure the LED pulse for time slot A and B
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_LED_PULSE_REG, AFE_SLOTA_LED_PULSE_PUP_VALUE);
-
-  // write to AFE - configure the number of LED pulse for time slot A
-  i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_NUMPULSES_REG, AFE_SLOTA_NUMPULSES_PUP_VALUE);
-
-  // write to AFE - configure the LED pulse for time slot B
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_LED_PULSE_REG, AFE_SLOTB_LED_PULSE_PUP_VALUE);
 
-  // write to AFE - configure the number of LED pulse for time slot B
+  // configure the number of LED pulse for time slot A and B
+  i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_NUMPULSES_REG, AFE_SLOTA_NUMPULSES_PUP_VALUE);
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_NUMPULSES_REG, AFE_SLOTB_NUMPULSES_PUP_VALUE);
 
-  // write to AFE - configure the AFE window for time slot A
+  // configure the AFE window for time slot A and B
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTA_AFE_WINDOW_REG, AFE_SLOTA_AFE_WINDOW_PUP_VALUE);
-  
-  // write to AFE - configure the AFE window for time slot B
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_SLOTB_AFE_WINDOW_REG, AFE_SLOTB_AFE_WINDOW_PUP_VALUE);
-  // end start-up configuration to AFE registers##############################
-} // end - load default start-up state into AFE registers
 
-// place the AFE in normal mode
+  // TODO: set additional registers for default setup%%%%%%%%%%%%%%%%%%%%%%%%%%
+  // // configure current values of RED and NIR LEDs to max intensity (do not increase)
+  // i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_ILED1_COARSE_REG, AFE_ILED1_COARSE_PUP_VALUE);
+  // i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_ILED2_COARSE_REG, AFE_ILED2_COARSE_PUP_VALUE);
+  // i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_ILED_FINE_REG, AFE_ILED_FINE_PUP_VALUE);
+  // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+}
+
+/**
+ * @brief Function to place the AFE in normal mode.
+ * 
+ */
 void afeNrmMode() {
   // write to AFE - place AFE in normal mode
   i2cWrite2Bytes(AFE_I2C_ADDRESS, AFE_MODE_REG, AFE_MODE_NRM_VALUE);
   // read from AFE - check status of normal mode
   word nrmStatus = i2cRead2Bytes(AFE_I2C_ADDRESS, AFE_MODE_REG);
 
-  // to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  // TODO: to be rerouted to MegunoLink%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   // print the AFE program mode status
   Serial.print("AFE in normal mode when = 0x02: 0x"); 
   Serial.println(nrmStatus, HEX);
   delay(0.5); // pause to display
   // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-} // end - place the AFE in normal mode
+}
 
-// update AFE configuration per MegunoLink command
-// register number, bits to modify, and value to modify
-// void afeModConfig(register, bits, value) {}
+/**
+ * @brief Function to update AFE registers per MegunoLink command.
+ * 
+ * @param mlRgMd          AFE register number
+ * @param mlBtMd          bits to modify
+ * @param mlVlMd          value to modify
+ * 
+ */
 void afeModConfig(byte mlRgMd, word mlBtMd, word mlVlMd) {
   // declare and initialize variables
   word prstRegVal = 0;
@@ -495,9 +525,12 @@ void afeModConfig(byte mlRgMd, word mlBtMd, word mlVlMd) {
 
   // place the AFE into normal mode after modifying the configuration
   afeNrmMode();  
-} // end - update AFE configuration per MegunoLink command
+}
 
-// read AFE 16-bit data registers
+/**
+ * @brief Function to read AFE 16-bit data registers containing photodiode data.
+ * 
+ */
 void afeReadData() {
   // hold time slots A&B data to prevent sample updates during register read
   i2cWrite2Bytes(AFE_I2C_ADDRESS,AFE_DATA_ACCESS_CTL_REG, AFE_DATA_ACCESS_CTL_HOLD_AB_VALUE);
@@ -543,9 +576,14 @@ void afeReadData() {
   MyPanel.SetText(F("PD1IR_DataLabel"), PD1IR_calibrated, 2);
   MyPanel.SetText(F("PD2IR_DataLabel"), PD2IR_calibrated, 2);
   MyPanel.SetText(F("PD3IR_DataLabel"), PD3IR_calibrated, 2);
-} // end - read AFE 16-bit data registers
+}
 
-// Function to recieve data from interface panel
+/**
+ * @brief Function to receive data from interface panel
+ * 
+ * @param Parameters      MegunoLink passed-in parameters
+ * 
+ */
 void Cmd_MlRequest(CommandParameter &Parameters){
   afeRequestInfoFlag = Parameters.NextParameterAsInteger ();
   mlRegMod = Parameters.NextParameterAsInteger ();
@@ -553,7 +591,12 @@ void Cmd_MlRequest(CommandParameter &Parameters){
   mlValMod = Parameters.NextParameterAsInteger ();
 }
 
-// Function that recieves register and data values from GUI
+/**
+ * @brief Function that receives register and data values from GUI
+ * 
+ * @param Parameters      MegunoLink passed-in parameters
+ * 
+ */
 void Cmd_MlReceive(CommandParameter &Parameters){
   afeModConfigFlag = Parameters.NextParameterAsInteger ();
   mlRegMod = Parameters.NextParameterAsInteger ();
@@ -568,27 +611,37 @@ void Cmd_MlReceive(CommandParameter &Parameters){
   Serial.println(mlValMod);
 }
 
-// Function to send all register values to chart in megunolink
+/**
+ * @brief Function to send all register values to chart in megunolink
+ * 
+ */
 void ReadAllRegisters(){
   int count = 0;
-  while(count<51){
+  while(count < TOTAL_NUMBER_REGISTERS){
     word value = i2cRead2Bytes(AFE_I2C_ADDRESS, Registers[count]);
     MyTable.SendData(Registers[count], value, "Register, Value (decimal)");
-    count = count +1;
+    count++;
   }
 }
 
-// Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
-// Ex.
-//    '!Calibrate 1000 2000 3000 4000 5000 6000 \r\n'
-// Result:
-//    PD1R_calibration_val -> 1000
-//    PD2R_calibration_val -> 2000
-//    PD3R_calibration_val -> 3000
-//    PD1IR_calibration_val -> 4000
-//    PD2IR_calibration_val -> 5000
-//    PD3IR_calibration_val -> 6000
-// This cmd is used by the calibration buttons on the GUI.
+/**
+ * @brief Command handler sets the value of global calibration variables to whatever is passed in.
+ * 
+ * Ex.
+ *     '!Calibrate 1000 2000 3000 4000 5000 6000 \r\n'
+ * Result:
+ * PD1R_calibration_val -> 1000
+ * PD2R_calibration_val -> 2000
+ * PD3R_calibration_val -> 3000
+ * PD1IR_calibration_val -> 4000
+ * PD2IR_calibration_val -> 5000
+ * PD3IR_calibration_val -> 6000
+ * 
+ * This cmd is used by the calibration buttons on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters
+ * 
+ */
 void Cmd_Calibrate(CommandParameter &Parameters){
   PD1R_calibration_val = Parameters.NextParameterAsInteger();
   PD2R_calibration_val = Parameters.NextParameterAsInteger();  
@@ -611,12 +664,18 @@ void Cmd_Calibrate(CommandParameter &Parameters){
   Serial.println(PD3IR_calibration_val);
 }
 
-// Cmd_Calibrate sets the value of global calibration variables to whatever is passed in.
-// Ex.
-//    '!SetCalibrationSetting 0 \r\n'
-// Result:
-//    Used in conjunction with the combo value list on the GUI, this selects 1 of 4 hard-coded calibration settings.
-// This cmd is used by the "Apply Calibration" button on the GUI.
+/**
+ * @brief Command handler sets the value of global calibration variables to predefined settings.
+ * 
+ * Ex.
+ *    '!SetCalibrationSetting 0 \r\n'
+ * Result:
+ *    Used in conjunction with the combo value list on the GUI, this selects 1 of 4 hard-coded calibration settings.
+ * This cmd is used by the "Apply Calibration" button on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters
+ * 
+ */
 void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
   int CalibrationSelection = Parameters.NextParameterAsInteger();
   if (CalibrationSelection == 0) { // values from Mourad's experiment (200k gain)
@@ -650,14 +709,21 @@ void Cmd_SetCalibrationSetting(CommandParameter &Parameters){
   }
 }
 
-// Cmd_ToggleAutoscroll disables or enables the autoscrolling of all channels at once.
-// Ex.
-//    '!ToggleAutoscroll \r\n'
-// Result:
-//    All individual channel plots on the GUI will stop scrolling if previously on or
-//    start scrolling if previously off.
-// This does not stop data from being sent to the device. Rather, it halts the display
-// of new data at user's will. This cmd is used by the "ToggleAutoscroll" button.
+/**
+ * @brief Command handler disables or enables the autoscrolling of all channels at once.
+ * 
+ * Ex.
+ *    '!ToggleAutoscroll \r\n'
+ * Result:
+ *    All individual channel plots on the GUI will stop scrolling if previously on or
+ * start scrolling if previously off.
+ * 
+ * This does not stop data from being sent to the device. Rather, it halts the display
+ * of new data at user's will. 
+ * 
+ * This cmd is used by the "ToggleAutoscroll" button.
+ * 
+ */
 void Cmd_ToggleAutoscroll(){
   if (toggleAutoScrollCounter % 2 == 0) { // if even, stop the scroll
     PD1TSA.Run(false);
@@ -677,25 +743,37 @@ void Cmd_ToggleAutoscroll(){
   toggleAutoScrollCounter++; // keep track of number times function called
 }
 
-// Cmd_MarkPlotPoint sends a visible data point at the current point in time, this point is saved
-// in the .csv file.
-// Ex.
-//    '!MarkPlotPoint \r\n'
-// Result:
-//    A dot can be seen in the time plots. The .csv file will contain the exact times when this command
-//    is used.
-// Cmd is used by "Calibrate" and "Remove Calibration" buttons.
+/**
+ * @brief Command handler sends a visible data point at the current point in time, this point is saved
+ * in the .csv file.
+ * 
+ * Ex.
+ *    '!MarkPlotPoint \r\n'
+ * Result:
+ *    A dot can be seen in the time plots. The .csv file will contain the exact times when this command
+ *    is used.
+ * 
+ * This cmd is used by "Calibrate" and "Remove Calibration" buttons.
+ * 
+ */
 void Cmd_MarkPlotPoint(){
   MarkedPoints.SendData("MarkedPoints", 5, Plot::Cyan, Plot::Dotted);
 }
 
-// Cmd_SetTimeRange sets the range of the x-axis by number of minutes.
-// Ex.
-//    '!Cmd_SetTimeRange 15 \r\n'
-// Result:
-//    Sets the x-axis range of all time plots to be 15 minutes in duration.
-// If the parameter is 0, the function will set the range to 30 seconds. This cmd is
-// used by the "Apply Range" button.
+/**
+ * @brief Command handler sets the range of the x-axis by number of minutes.
+ * 
+ * Ex.
+ *    '!Cmd_SetTimeRange 15 \r\n'
+ * Result:
+ *    Sets the x-axis range of all time plots to be 15 minutes in duration.
+ * If the parameter is 0, the function will set the range to 30 seconds.
+ * 
+ * This cmd is used by the "Apply Range" button.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters 
+ * 
+ */
 void Cmd_SetTimeRange(CommandParameter &Parameters){
   int numMinutes = Parameters.NextParameterAsInteger();
   if (numMinutes == 0) { // if 0 minutes, set to 30 seconds
@@ -715,12 +793,19 @@ void Cmd_SetTimeRange(CommandParameter &Parameters){
   }
 }
 
-// Cmd_SetYAxis updates the y-axis scale for the individual time plots on the GUI.
-// Ex.
-//    '!SetYAxis 0 12000 0 0 0 1 1 1 \r\n'
-// Result:
-//    All NIR channel time plots on the GUI will begin at 0 and end at 12000.
-// This cmd is used by the "Set y-axis" button on the GUI.
+/**
+ * @brief Command handler updates the y-axis scale for the individual time plots on the GUI.
+ * 
+ * Ex.
+ *    '!SetYAxis 0 12000 0 0 0 1 1 1 \r\n'
+ * Result:
+ *    All NIR channel time plots on the GUI will begin at 0 and end at 12000.
+ * 
+ * This cmd is used by the "Set y-axis" button on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters  
+ * 
+ */
 void Cmd_SetYAxis(CommandParameter &Parameters){
   // get command lower and upper bounds
   word YAxisLowerBound = Parameters.NextParameterAsInteger();
@@ -767,13 +852,20 @@ void Cmd_SetYAxis(CommandParameter &Parameters){
   Serial.println(YAxisUpperBound);
 }
 
-// Cmd_SetYAxisCheckboxes updates the status of the checkboxes in the "Plot Controls"
-// tab in MegunoLink.
-// Ex.
-//    '!SetYAxisCheckboxes 0 0 0 0 0 0 \r\n'
-// Result:
-//    All checkboxes are unchecked.
-// This cmd is used by the "Select All" and "Clear" buttons on the GUI.
+/**
+ * @brief Command handler updates the status of the checkboxes in the "Plot Controls."
+ * tab in MegunoLink.
+ * 
+ * Ex.
+ *    '!SetYAxisCheckboxes 0 0 0 0 0 0 \r\n'
+ * Result:
+ *    All checkboxes are unchecked.
+ * 
+ * This cmd is used by the "Select All" and "Clear" buttons on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters   
+ * 
+ */
 void Cmd_SetYAxisCheckboxes(CommandParameter &Parameters){
   MyPanel.SetCheck(F("PD1R_Checkbox"), (bool)Parameters.NextParameterAsInteger());
   MyPanel.SetCheck(F("PD2R_Checkbox"), (bool)Parameters.NextParameterAsInteger());
@@ -783,12 +875,19 @@ void Cmd_SetYAxisCheckboxes(CommandParameter &Parameters){
   MyPanel.SetCheck(F("PD3IR_Checkbox"), (bool)Parameters.NextParameterAsInteger());
 }
 
-// Cmd_SetYAxisUIValues sets the y-axis upper and lower bounds to given values.
-// Ex.
-//    '!SetYAxisUIValues 0 9000 \r\n'
-// Result:
-//    The GUI will display the upper and lower bounds as 9000 and 0, respectively.
-// This cmd is used by the "Set Y-axis to Default" and "Remove Calibration" buttons on the GUI.
+/**
+ * @brief Command handler sets the y-axis upper and lower bounds to given values.
+ * 
+ * Ex.
+ *    '!SetYAxisUIValues 0 9000 \r\n'
+ * Result:
+ *    The GUI will display the upper and lower bounds as 9000 and 0, respectively.
+ * 
+ * This cmd is used by the "Set Y-axis to Default" and "Remove Calibration" buttons on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters    
+ * 
+ */
 void Cmd_SetYAxisUIValues(CommandParameter &Parameters){
   int lower = Parameters.NextParameterAsInteger();
   int upper = Parameters.NextParameterAsInteger();
@@ -798,23 +897,33 @@ void Cmd_SetYAxisUIValues(CommandParameter &Parameters){
   MyPanel.SetNumber(F("YAxisUpperDP"), upper);
 }
 
-// Cmd_SetBoundsToDefault sets bounds of x and y axes to their default values.
-// Ex.
-//    '!SetBoundsToDefault \r\n'
-// Result:
-//    All timeplot bounds will be reset to their default value (x = 2min range, y = 0-10)
-// This is used by the "Set Bounds to Default" button.
+/**
+ * @brief Command handler sets bounds of x and y axes to their default values.
+ * 
+ * Ex.
+ *    '!SetBoundsToDefault \r\n'
+ * Result:
+ *    All timeplot bounds will be reset to their default value (x = 2min range, y = 0-10)
+ * 
+ * This cmd used by the "Set Bounds to Default" button.
+ * 
+ */
 void Cmd_SetBoundsToDefault(){
   Cmd_SetYAxisToDefault();
   Cmd_SetTimeRangeToDefault();
 }
 
-// Cmd_SetYAxisToDefault sets time plots upper, lower bounds to default.
-// Ex.
-//    '!SetYAxisToDefault \r\n'
-// Result:
-//    Time plot y-axes are set to default bounds.
-// This cmd is used by the "Set Y-axis to Default" button.
+/**
+ * @brief Command handler sets time plots upper, lower bounds to default.
+ * 
+ * Ex.
+ *    '!SetYAxisToDefault \r\n'
+ * Result:
+ *    Time plot y-axes are set to default bounds.
+ * 
+ * This cmd is used by the "Set Y-axis to Default" button.
+ * 
+ */
 void Cmd_SetYAxisToDefault(){
   // RED channel
   PD1TSA.SetYRange(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
@@ -832,12 +941,17 @@ void Cmd_SetYAxisToDefault(){
   PD3TSB.SetY2Range(YAXIS_LOWER_DEFAULT, YAXIS_UPPER_DEFAULT);
 }
 
-// Cmd_SetTimeRangeToDefault sets time range to 2 minutes, updates GUI to reflect change.
-// Ex.
-//    '!SetTimeRangeToDefault \r\n'
-// Result:
-//    Time plots are set to 2 minute range on x-axis. "Time Range Options" valuebox reflects change.
-// This cmd is used by the "Set X-axis to Default" button.
+/**
+ * @brief Command handler sets time range to 2 minutes, updates GUI to reflect change.
+ * 
+ * Ex.
+ *    '!SetTimeRangeToDefault \r\n'
+ * Result:
+ *    Time plots are set to 2 minute range on x-axis. "Time Range Options" valuebox reflects change.
+ * 
+ * This cmd is used by the "Set X-axis to Default" button.
+ * 
+ */
 void Cmd_SetTimeRangeToDefault(){
   PD1TSA.SetXRange((float)TIME_RANGE_DEFAULT / 60); // 2 minutes (# min./# min. in hour)
   PD2TSA.SetXRange((float)TIME_RANGE_DEFAULT / 60);
@@ -850,27 +964,37 @@ void Cmd_SetTimeRangeToDefault(){
   MyPanel.SetListValue(F("XAxisRangeOptionsDP"), TIME_RANGE_DEFAULT);
 }
 
-// Cmd_SetControlsToDefault sets the GUI numbers to their default values.
-// Ex.
-//    '!SetControlsToDefault \r\n'
-// Result:
-//    All device settings will display their default values.
-// This cmd is used by the "Set to Default" button on the GUI.
+/**
+ * @brief Command handler sets the GUI numbers to their default values.
+ * 
+ * Ex.
+ *    '!SetControlsToDefault \r\n'
+ * Result:
+ *    All device settings will display their default values.
+ * 
+ * This cmd is used by the "Set to Default" button on the GUI.
+ * 
+ */
 void Cmd_SetControlsToDefault(){
-  MyPanel.SetNumber(F("RedLEDCoarse"), 10);
-  MyPanel.SetNumber(F("NIRLEDCoarse"), 4);
-  MyPanel.SetListValue(F("TIAOptions"), 0);
-  MyPanel.SetNumber(F("OFFSET"), 7800);
-  MyPanel.SetNumber(F("SampleAVG"), 5);
-  MyPanel.SetNumber(F("Sample"), 16);
+  MyPanel.SetNumber(F("RedLEDCoarse"), RED_LED_COARSE_DEFAULT);
+  MyPanel.SetNumber(F("NIRLEDCoarse"), NIR_LED_COARSE_DEFAULT);
+  MyPanel.SetListValue(F("TIAOptions"), TIA_OPTION_DEFAULT);
+  MyPanel.SetNumber(F("OFFSET"), SIGNAL_OFFSET_DEFAULT);
+  MyPanel.SetNumber(F("SampleAVG"), SAMPLE_AVG_DEFAULT);
+  MyPanel.SetNumber(F("Sample"), SAMPLE_DEFAULT);
 }
 
-// Cmd_ClearData deletes all data points from all time plots on the GUI.
-// Ex.
-//    '!ClearData \r\n'
-// Result:
-//    All time plots are empty.
-// This cmd is used by the "Clear All Data" button on the GUI.
+/**
+ * @brief Command handler deletes all data points from all time plots on the GUI.
+ * 
+ * Ex.
+ *    '!ClearData \r\n'
+ * Result:
+ *    All time plots are empty.
+ * 
+ * This cmd is used by the "Clear All Data" button on the GUI.
+ * 
+ */
 void Cmd_ClearData(){
   PD1TSA.Clear();
   PD2TSA.Clear();
@@ -880,27 +1004,39 @@ void Cmd_ClearData(){
   PD3TSB.Clear();
 }
 
-// Cmd_ToggleDataStream stops data from being sent to the GUI.
-// Ex.
-//    '!ToggleDataStream \r\n'
-// Result:
-//    All timeplots no longer update with new data.
-// This cmd is used by the "Toggle Data Stream" button on the GUI.
+/**
+ * @brief Command handler stops data from being sent to the GUI.
+ * 
+ * Ex.
+ *    '!ToggleDataStream \r\n'
+ * Result:
+ *    All timeplots no longer update with new data.
+ * 
+ * This cmd is used by the "Toggle Data Stream" button on the GUI.
+ * 
+ */
 void Cmd_ToggleDataStream(){
   if((toggleDataStreamCounter % 2) == 0) {
-    ModifyRegister(1, 75, 128, 0); // disable sample clock
+    afeModConfig(AFE_SAMPLE_CLK_REG, 0x80, 0); // disable sample clock
   } else {
     afeSmplClk(); // enable sample clock
   }
   toggleDataStreamCounter++; // track number of times function is called
 }
 
-// Cmd_ZoomYAxis zooms all time plots on the y-axis.
-// Ex.
-//    '!ZoomYAxis 5 \r\n'
-// Result:
-//    Time plots y-axis bounds are zoomed to +/- 5 units from latest data point.
-// This cmd is used by the "Zoom" button on the GUI.
+/**
+ * @brief Command handler zooms all time plots on the y-axis.
+ * 
+ * Ex.
+ *    '!ZoomYAxis 5 \r\n'
+ * Result:
+ *    Time plots y-axis bounds are zoomed to +/- 5 units from latest data point.
+ * 
+ * This cmd is used by the "Zoom" button on the GUI.
+ * 
+ * @param Parameters      MegunoLink passed-in parameters       
+ * 
+ */
 void Cmd_ZoomYAxis(CommandParameter &Parameters){
   int numChannels = 6;
   float zoomBounds = Parameters.NextParameterAsDouble();
@@ -924,24 +1060,34 @@ void Cmd_ZoomYAxis(CommandParameter &Parameters){
     plotArray[i].SetY2Range(lowerBound, upperBound);
   }
 }
-// End MegunoLink function to recieve data from interface panel
 
-// Helper function to allow code to modify data registers
-void ModifyRegister(bool modFlag, byte modReg, word modByte, word modVal){
-  afeModConfigFlag = modFlag;
-  mlRegMod = modReg;
-  mlByteMod = modByte;
-  mlValMod = modVal;
+// TODO: do we need this?
+// /**
+//  * @brief Helper function to allow code to modify AFE data registers.
+//  * 
+//  * @param modReg          AFE register number
+//  * @param modByte         value of bits to modify
+//  * @param modVal          value of overwrite bits
+//  * 
+//  */
+// void ModifyRegister(byte modReg, word modByte, word modVal){
+//   afeModConfigFlag = true;
+//   mlRegMod = modReg;
+//   mlByteMod = modByte;
+//   mlValMod = modVal;
 
-  Serial.print("mlRegMod at input");
-  Serial.println(mlRegMod);
-  Serial.print("mlByteMod at input");
-  Serial.println(mlByteMod);
-  Serial.print("mlValMod at input");
-  Serial.println(mlValMod);
-}
+//   Serial.print("mlRegMod at input");
+//   Serial.println(mlRegMod);
+//   Serial.print("mlByteMod at input");
+//   Serial.println(mlByteMod);
+//   Serial.print("mlValMod at input");
+//   Serial.println(mlValMod);
+// }
 
-// Helper function invoked inside afeReadData, sets calibration to default values.
+/**
+ * @brief Helper function invoked inside afeReadData, sets calibration to default values.
+ * 
+ */
 void SetCalibrationToDefault(){
   PD1R_calibration_val = 1;
   PD2R_calibration_val = 1;
@@ -950,9 +1096,9 @@ void SetCalibrationToDefault(){
   PD2IR_calibration_val = 1;
   PD3IR_calibration_val = 1;
 }
-// end - user defined functions******************************
+// END - USER-DEFINED FUNCTIONS******************************************
 
-// begin - setup*********************************************
+
 void setup() {
   // enable watchdog timer with a 4 second timeout
   wdt_enable(WDTO_4S);
@@ -996,7 +1142,6 @@ void setup() {
   SerialCommandHandler.AddCommand(F("SetYAxisUIValues"), Cmd_SetYAxisUIValues);
   // Adds "!SetTimeRange" function to set the x-axis range in terms of minutes.
   SerialCommandHandler.AddCommand(F("SetTimeRange"), Cmd_SetTimeRange);
-
   // Adds "!SetTimeRangeToDefault" function to reset x-axis bounds to 2 minutes.
   SerialCommandHandler.AddCommand(F("SetTimeRangeToDefault"), Cmd_SetTimeRangeToDefault);
   // Adds "!SetYAxisToDefault" function to stop data from being sent to time plots.
@@ -1019,13 +1164,12 @@ void setup() {
   // reset watchdog timer at end of setup
   wdt_reset();  
 }
-// end - setup***********************************************
 
-// begin - loop**********************************************
+
 void loop() {
-  // read in MegunoLink commands%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   // set AFE modify config flag
-  //afeModConfigFlag = false;
+  // afeModConfigFlag = false;
+
   // single-byte (8-bit) AFE register to modify
   mlRegMod = 0x00;
   // double-byte (16-bit word) value to read into the AFE register
@@ -1033,8 +1177,9 @@ void loop() {
   // 16-bit word value of bytes within register to be changed 
   mlByteMod = 0x00;
   
-  //Processes serial comands from MegunoLink 
+  // processes serial comands from MegunoLink 
   SerialCommandHandler.Process();
+
   // AFE modify config flag is set when MegunoLink sends command
   if (afeModConfigFlag == true) {
     // update AFE configuration per MegunoLink command
@@ -1043,7 +1188,7 @@ void loop() {
     afeModConfig(mlRegMod, mlByteMod, mlValMod);
     // reset AFE modify config flag
     afeModConfigFlag = false;
-  } // end - AFE modify config
+  }
   
   // AFE read data flag is set when AFE data registers are ready to be read
   if (afeReadDataFlag == true) {
@@ -1051,7 +1196,7 @@ void loop() {
     afeReadData();    
     // reset AFE read data flag
     afeReadDataFlag = false;
-  } // end - AFE read data
+  }
   
   // AFE request info flag is set when user requests current value of a register without
   // changing it
@@ -1069,7 +1214,7 @@ void loop() {
     afeRequestInfoFlag = false;
     } 
   }
+
   // reset watchdog timer at end of loop
   wdt_reset();  
 }
-// end - loop************************************************
